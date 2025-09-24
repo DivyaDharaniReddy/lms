@@ -1,60 +1,98 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'JDK_HOME'
+        maven 'MAVEN_HOME'
+    }
+
     environment {
-        BACKEND_IMAGE = "libraryms-app-rest"
-        FRONTEND_IMAGE = "libraryms-app-web"
+        // Update the paths to match the directory names in the image
+        BACKEND_DIR = 'libraryrams-app-rest'  // Backend directory
+        FRONTEND_DIR = 'libraryrams-app-web'  // Frontend directory
+
+        TOMCAT_URL = 'http://184.72.122.226:9090/manager/text'
+        TOMCAT_USER = 'admin'
+        TOMCAT_PASS = 'admin'
+
+        BACKEND_WAR = 'springapp1.war'
+        FRONTEND_WAR = 'frontapp1.war'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/DivyaDharaniReddy/lms.git'
+                // Updated to use your new GitHub URL
+                git url: 'https://github.com/DivyaDharaniReddy/lms.git', branch: 'master'
             }
         }
 
-        stage('Build Backend Jar') {
+        stage('Build Frontend (Vite)') {
             steps {
-                dir('libraryms-app-rest') {
-                    // Build Spring Boot JAR
-                    bat "mvn clean package -DskipTests"
+                dir("${env.FRONTEND_DIR}") {
+                    script {
+                        def nodeHome = tool name: 'NODE_HOME', type: 'jenkins.plugins.nodejs.tools.NodeJSInstallation'
+                        env.PATH = "${nodeHome}/bin:${env.PATH}"
+                    }
+                    sh 'npm install'
+                    sh 'npm run build'
                 }
             }
         }
 
-        stage('Build Backend Docker Image') {
+        stage('Package Frontend as WAR') {
             steps {
-                dir('libraryms-app-rest') {
-                    bat "docker build -t ${BACKEND_IMAGE} ."
+                dir("${env.FRONTEND_DIR}") {
+                    sh """
+                        mkdir -p frontapp1_war/WEB-INF
+                        cp -r dist/* frontapp1_war/
+                        jar -cvf ../../${FRONTEND_WAR} -C frontapp1_war .
+                    """
                 }
             }
         }
 
-        stage('Build Frontend Docker Image') {
+        stage('Build Backend (Spring Boot WAR)') {
             steps {
-                dir('libraryms-app-web') {
-                    bat "docker build -t ${FRONTEND_IMAGE} ."
+                dir("${env.BACKEND_DIR}") {
+                    sh 'mvn clean package'
+                    sh "cp target/*.war ../../${BACKEND_WAR}"
                 }
             }
         }
 
-        stage('Push Images (Optional)') {
+        stage('Deploy Backend to Tomcat (/springapp1)') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
-                                                 usernameVariable: 'DOCKER_USER',
-                                                 passwordVariable: 'DOCKER_PASS')]) {
-                    bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
-                    bat "docker push ${BACKEND_IMAGE}"
-                    bat "docker push ${FRONTEND_IMAGE}"
+                script {
+                    sh """
+                        curl -u ${TOMCAT_USER}:${TOMCAT_PASS} \\
+                          --upload-file ${BACKEND_WAR} \\
+                          "${TOMCAT_URL}/deploy?path=/springapp1&update=true"
+                    """
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Frontend to Tomcat (/frontapp1)') {
             steps {
-                bat "docker-compose up -d"
+                script {
+                    sh """
+                        curl -u ${TOMCAT_USER}:${TOMCAT_PASS} \\
+                          --upload-file ${FRONTEND_WAR} \\
+                          "${TOMCAT_URL}/deploy?path=/frontapp1&update=true"
+                    """
+                }
             }
         }
     }
-}
 
+    post {
+        success {
+            echo "✅ Backend deployed: http://184.72.122.226:9090/springapp1"
+            echo "✅ Frontend deployed: http://184.72.122.226:9090/frontapp1"
+        }
+        failure {
+            echo "❌ Build or deployment failed"
+        }
+    }
+}
