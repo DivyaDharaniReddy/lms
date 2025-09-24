@@ -16,7 +16,7 @@ pipeline {
         stage('Build Backend Docker Image') {
             steps {
                 dir('libraryms-app-rest') {
-                    bat 'docker build -t %BACKEND_IMAGE% .'
+                    bat "docker build -t ${BACKEND_IMAGE} ."
                 }
             }
         }
@@ -24,21 +24,26 @@ pipeline {
         stage('Build Frontend Docker Image') {
             steps {
                 dir('libraryms-app-web') {
-                    bat 'docker build -t %FRONTEND_IMAGE% .'
+                    bat "docker build -t ${FRONTEND_IMAGE} ."
                 }
             }
         }
 
         stage('Push Images (Optional)') {
             steps {
-                bat 'docker push %BACKEND_IMAGE%'
-                bat 'docker push %FRONTEND_IMAGE%'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', 
+                                                 usernameVariable: 'DOCKER_USER', 
+                                                 passwordVariable: 'DOCKER_PASS')]) {
+                    bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
+                    bat "docker push ${BACKEND_IMAGE}"
+                    bat "docker push ${FRONTEND_IMAGE}"
+                }
             }
         }
 
         stage('Deploy') {
             steps {
-                bat 'docker-compose up -d'
+                bat "docker-compose up -d"
             }
         }
     }
