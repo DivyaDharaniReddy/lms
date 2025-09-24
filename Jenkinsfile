@@ -13,6 +13,15 @@ pipeline {
             }
         }
 
+        stage('Build Backend Jar') {
+            steps {
+                dir('libraryms-app-rest') {
+                    // Build Spring Boot JAR
+                    bat "mvn clean package -DskipTests"
+                }
+            }
+        }
+
         stage('Build Backend Docker Image') {
             steps {
                 dir('libraryms-app-rest') {
@@ -31,8 +40,8 @@ pipeline {
 
         stage('Push Images (Optional)') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', 
-                                                 usernameVariable: 'DOCKER_USER', 
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                 usernameVariable: 'DOCKER_USER',
                                                  passwordVariable: 'DOCKER_PASS')]) {
                     bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
                     bat "docker push ${BACKEND_IMAGE}"
@@ -48,3 +57,4 @@ pipeline {
         }
     }
 }
+where i have to paste this
