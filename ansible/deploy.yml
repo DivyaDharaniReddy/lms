@@ -1,0 +1,14 @@
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Copy docker-compose file
+      copy:
+        src: docker-compose.yml
+        dest: /tmp/docker-compose.yml
+    - name: Start stack
+      community.docker.docker_compose:
+        project_src: /tmp
+        files:
+          - docker-compose.yml
+        state: present
